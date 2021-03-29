@@ -38,6 +38,7 @@ extern "C" {
 
 __attribute__((constructor))
 void init() {
+  printf("Running init...\n");
   std::ios_base::Init i;
 
   std::ifstream device_id_file{"/sys/devices/soc0/machine"};
@@ -61,6 +62,8 @@ void init() {
       DO_WAIT_IOCTL = false;
     }
   }
+
+  printf("Init done. RM2 = %d, IN_XOCHITL = %d\n", ON_RM2, IN_XOCHITL);
 }
 
 __attribute__((visibility("default")))
@@ -86,8 +89,10 @@ void _ZN6QImageC1EiiNS_6FormatE(void *that, int x, int y, int f) {
 
 __attribute__((visibility("default")))
 int open64(const char *pathname, int flags, mode_t mode = 0) {
+  printf("Got open64\n");
   if (ON_RM2 && !IN_XOCHITL) {
     if (pathname == std::string("/dev/fb0")) {
+      printf("Got open64 for fd %d\n", swtfb::ipc::SWTFB_FD);
       return swtfb::ipc::SWTFB_FD;
     }
   }
@@ -100,8 +105,10 @@ int open64(const char *pathname, int flags, mode_t mode = 0) {
 
 __attribute__((visibility("default")))
 int open(const char *pathname, int flags, mode_t mode = 0) {
+  printf("Got open\n");
   if (ON_RM2 && !IN_XOCHITL) {
     if (pathname == std::string("/dev/fb0")) {
+      printf("Got open for fd %d\n", swtfb::ipc::SWTFB_FD);
       return swtfb::ipc::SWTFB_FD;
     }
   }
@@ -125,16 +132,22 @@ int close(int fd) {
 
 __attribute__((visibility("default")))
 int ioctl(int fd, unsigned long request, char *ptr) {
+  printf("Got ioctl for fd %d\n", fd);
+    printf("ioctl: ON_RM2 = %d, IN_XOCHITL = %d, fd = %d, SWTFB_FD = %d, fd == swtfb::ipc::SWTFB_FD = %d\n", ON_RM2, IN_XOCHITL, fd, swtfb::ipc::SWTFB_FD, fd == swtfb::ipc::SWTFB_FD);
   if (ON_RM2 && !IN_XOCHITL && fd == swtfb::ipc::SWTFB_FD) {
+      printf("ioctl: Is Framebuffer FD");
     if (request == MXCFB_SEND_UPDATE) {
+      printf("ioctl: Request is MXCFB_SEND_UPDATE\n");
 
       mxcfb_update_data *update = (mxcfb_update_data *)ptr;
       MSGQ.send(*update);
       return 0;
     } else if (request == MXCFB_SET_AUTO_UPDATE_MODE) {
+      printf("ioctl: Request is MXCFB_SET_AUTO_UPDATE_MODE\n");
 
       return 0;
     } else if (request == MXCFB_WAIT_FOR_UPDATE_COMPLETE) {
+      printf("ioctl: Request is MXCFB_WAIT_FOR_UPDATE_COMPLETE\n");
 #ifdef DEBUG
       std::cerr << "CLIENT: sync" << std::endl;
 #endif
@@ -189,6 +202,7 @@ int ioctl(int fd, unsigned long request, char *ptr) {
     }
 
     else if (request == FBIOGET_VSCREENINFO) {
+      printf("ioctl: Request is FBIOGET_VSCREENINFO\n");
 
       fb_var_screeninfo *screeninfo = (fb_var_screeninfo *)ptr;
       screeninfo->xres = swtfb::WIDTH;
@@ -209,9 +223,10 @@ int ioctl(int fd, unsigned long request, char *ptr) {
     }
 
     else if (request == FBIOPUT_VSCREENINFO) {
-
+      printf("ioctl: Request is FBIOPUT_VSCREENINFO\n");
       return 0;
     } else if (request == FBIOGET_FSCREENINFO) {
+      printf("ioctl: Request is FBIOGET_FSCREENINFO\n");
 
       fb_fix_screeninfo *screeninfo = (fb_fix_screeninfo *)ptr;
       screeninfo->smem_len = swtfb::ipc::BUF_SIZE;
@@ -229,6 +244,7 @@ int ioctl(int fd, unsigned long request, char *ptr) {
   static auto func_ioctl =
       (int (*)(int, unsigned long request, ...))dlsym(RTLD_NEXT, "ioctl");
 
+  printf("ioctl: Not caught. Using default ioctl.\n");
   return func_ioctl(fd, request, ptr);
 }
 
